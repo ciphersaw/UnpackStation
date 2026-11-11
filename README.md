@@ -1,0 +1,178 @@
+# UnpackStation
+
+A portable Windows tool that **extracts** installer packages into a chosen directory
+without ever running the installer.
+
+- `.exe` packages: dynamically loads the bundled `engines/7z/x64/7z.dll` (7-Zip 26.01 x64)
+  and probes NSIS / CAB SFX / generic SFX / 7z / zip by content. No COM registration,
+  no 7-Zip installation required.
+- `.msi` packages: runs the system `msiexec /a` administrative install so embedded and
+  external CAB files are handled correctly.
+- Unsupported formats fail with a clear reason instead of guessing. Inno Setup and
+  InstallShield currently report that they are not supported.
+
+## 7-Zip license notice (required for binary redistribution)
+
+1. **This software uses parts of 7-Zip** (`7z.dll`) through dynamic loading only.
+2. **7-Zip is licensed under the GNU LGPL** (some parts carry the unRAR restriction or
+   use a BSD license).
+3. **7-Zip source code is available at [www.7-zip.org](https://www.7-zip.org).**
+
+Releases ship 7-Zip's `engines/7z/License.txt`; that file is authoritative for
+binary redistribution. The same three statements appear in the application's About
+window. This tool does not use innounp (GPLv3), does not copy UniExtract2 code, and
+has no GPL/AGPL dependencies.
+
+## Usage
+
+Drop an `.exe` / `.msi` onto the window or click the drop zone to pick a file, confirm
+the output directory, then click **Start extraction**.
+
+The default output directory is derived from the package's own install location and
+points to **the directory that actually contains the extracted result**. Files that
+already exist in the output directory are skipped and never overwritten.
+
+Progress: `.exe` reports the number of bytes actually written. `.msi` uses the MSI
+`File` table row count as the denominator and the files already written to the staging
+directory as the numerator; if the `File` table cannot be read, the bar stays
+indeterminate (Marquee) instead of inventing a percentage.
+
+NSIS installers skip the installer's runtime plugins and temporary files
+(`$PLUGINSDIR`, `$TEMP`), so only the files a real installation would produce are
+extracted, with the same directory layout.
+
+Safety: path traversal protection (including symlinks and directory junctions),
+decompression-bomb protection (aborts above 20 GB or 100,000 files), Mark of the Web
+on extracted executables, standard user privileges (`asInvoker`, no elevation),
+PerMonitorV2 DPI awareness and long-path support. The tool never runs anything it
+extracts.
+
+On failure, use **Copy diagnostic information** at the top right of the log to get
+the source path, engine, exit code / HRESULT, exceptions and warnings. Unhandled
+exceptions are also written to `%LOCALAPPDATA%\UnpackStation\crash.log`.
+
+## Prerequisites: the .NET 10 SDK
+
+This project targets `net10.0-windows` (WPF), so the SDK is needed on the
+development machine for every command in the next section. It is not needed on
+the target machine: the published app is self-contained.
+
+Check whether it is already available:
+
+```bash
+dotnet --info
+```
+
+If `dotnet` is not found, install the Windows x64 .NET 10 SDK (it includes the
+Windows Desktop targeting pack required by WPF) with the official installer, or
+unpack the SDK archive into a directory of your choice, for example
+`%USERPROFILE%\.dotnet`. For the unpacked SDK, add that directory to the user
+`PATH` so `dotnet` works from any terminal:
+
+```powershell
+$sdk = Join-Path $env:USERPROFILE '.dotnet'
+$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+$parts = @($userPath -split ';' | Where-Object { $_ })
+if ($parts -notcontains $sdk) {
+    [Environment]::SetEnvironmentVariable('Path', (($parts + $sdk) -join ';'), 'User')
+}
+```
+
+Open a **new** terminal afterwards -- a running terminal keeps the old `PATH` --
+and run `dotnet --info` again. If you prefer not to change `PATH`, call the SDK
+by its full path in every command below, for example
+`& "$env:USERPROFILE\.dotnet\dotnet.exe" run --project src/UnpackStation.csproj`.
+
+## Build, run, test and publish
+
+All commands below are run from the repository root and assume the .NET 10 SDK is
+available as `dotnet` (see **Prerequisites** above). Every build copies
+`engines/7z/` into the output directory, so `7z.dll` resolves from
+`AppContext.BaseDirectory` in both the Debug and the published layout.
+
+### `dotnet run` -- develop and launch
+
+```bash
+dotnet run --project src/UnpackStation.csproj
+```
+
+Restores, builds the Debug configuration and starts the WPF window in one step.
+Use it while changing code: it is the quickest way to see an edit on screen, and
+it needs no publish step -- the SDK supplies the runtime. Add `-c Release` for
+the Release configuration; press `Ctrl+C` in the terminal or close the window to
+stop. The built `src/bin/Debug/net10.0-windows/UnpackStation.exe` can also be
+launched directly. Because `dotnet run` rebuilds before starting, close an
+already running instance first: the running process locks the exe and its dlls
+and the build fails.
+
+### `dotnet build` -- compile without starting
+
+```bash
+dotnet build UnpackStation.sln -c Debug
+```
+
+Compiles both projects of the solution and reports compile errors without
+launching the app. Use it for a fast check that the whole solution still builds,
+or when you only need the binaries under `src/bin/`.
+
+### `dotnet test` -- run the test suite
+
+```bash
+dotnet test UnpackStation.sln -c Debug
+```
+
+Builds the solution and runs the xUnit suite in `tests/`. Use it after changing
+extraction, MSI or path-handling code, and before committing. Test fixtures are
+described under **Tests** below.
+
+### `dotnet publish` -- produce the release
+
+```bash
+dotnet publish src/UnpackStation.csproj -c Release -r win-x64 --self-contained true -o publish
+```
+
+Produces the self-contained win-x64 build in `publish/`; the target machine needs
+no .NET runtime. This is the only supported release route -- use `run`, `build`
+and `test` during development instead. `publish/` is the final runnable directory.
+Copy the whole folder, not just the exe:
+
+```text
+publish/
+├─ UnpackStation.exe                  # double-click entry point
+├─ hostfxr.dll / coreclr.dll / ...    # .NET runtime, next to the exe
+├─ UnpackStation.dll / *.dll          # app and WPF assemblies
+├─ <language resource folders>/       # satellite resource assemblies
+└─ engines/7z/
+   ├─ License.txt                     # 7-Zip LGPL license text
+   └─ x64/7z.dll                      # 7-Zip engine
+```
+
+To produce the distributable zip, run the packaging script after publishing:
+
+```bash
+dotnet run PackRelease.cs
+```
+
+`PackRelease.cs` is a single-file app run by the .NET 10 SDK already needed to build this
+project. It uses only `System.IO.Compression`, so there is no dependency on 7-Zip,
+a PowerShell execution policy or a machine-specific install path. The script
+checks that `publish/` is complete, writes explicit directory entries, replaces
+any previous zip and verifies that the archive root contains `UnpackStation.exe`,
+the license and `7z.dll` with no `publish/` prefix. Use
+`dotnet run PackRelease.cs -- <publishDir> <outputZip>` to override the paths.
+
+`dist/UnpackStation-win-x64.zip` is the resulting artifact (about 61 MiB,
+403 files, 16 folders); both `publish/` and `dist/` are build output and are
+ignored by git, and the zip name carries no version number.
+
+`7z.dll` must stay at `engines/7z/x64/7z.dll` relative to the exe (the
+app resolves it from `AppContext.BaseDirectory`). Running the published app needs
+no COM registration and no installed 7-Zip -- the engine is the bundled `7z.dll`,
+which can be replaced as LGPL allows. Only an x64 engine is shipped, so the
+project is pinned to `<PlatformTarget>x64</PlatformTarget>`.
+
+## Tests
+
+Integration samples are generated at runtime by `tests/TestFixtures.cs`, so no binary
+test fixtures are tracked in the repository. The few deliberately non-ASCII string
+literals in the test suite are input data for Unicode path handling, not UI text.

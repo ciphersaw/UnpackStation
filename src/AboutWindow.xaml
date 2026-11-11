@@ -1,0 +1,59 @@
+<Window x:Class="UnpackStation.AboutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="About UnpackStation"
+        Width="560" Height="460"
+        MinWidth="460" MinHeight="360"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="UnpackStation" FontSize="20" FontWeight="SemiBold"
+                       Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}" />
+            <TextBlock Margin="0,6,0,0" Text="Extracts installer packages to a chosen directory without running the installer."
+                       Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+        </StackPanel>
+
+        <Border Grid.Row="1" Margin="0,16,0,0" Padding="12"
+                BorderThickness="1" CornerRadius="4"
+                BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
+                Background="{DynamicResource {x:Static SystemColors.ControlLightLightBrushKey}}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="7-Zip License Notice" FontWeight="SemiBold" Margin="0,0,0,8"
+                               Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}" />
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                               Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"
+                               Text="1. This software uses part of 7-Zip (7z.dll) via dynamic loading only; it does not install or register 7-Zip." />
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                               Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"
+                               Text="2. 7-Zip is licensed under the GNU LGPL (some code is subject to the unRAR restriction or uses the BSD license)." />
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,12"
+                               Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"
+                               Text="3. The 7-Zip source code is available at www.7-zip.org." />
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                               Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
+                               Text="A 7-Zip License.txt is shipped with the release (at engines/7z/License.txt in the program directory); the licensing information required for binary distribution is governed by it." />
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                               Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
+                               Text="This tool does not use innounp (GPLv3), does not copy UniExtract2 code, and introduces no GPL/AGPL dependencies." />
+                    <TextBlock TextWrapping="Wrap" Margin="0,8,0,0"
+                               Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
+                               Text="Security note: extracted executables are tagged with Mark of the Web; the program always runs with normal privileges and never automatically runs any extracted program." />
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button Width="150" Height="28" Content="View License.txt" Click="OpenLicense_Click" />
+            <Button Width="80" Height="28" Margin="12,0,0,0" Content="Close" IsCancel="True" Click="Close_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

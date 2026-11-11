@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>UnpackStation</RootNamespace>
+    <AssemblyName>UnpackStation</AssemblyName>
+    <!-- The bundled 7z.dll is x64 only, so the process bitness must match -->
+    <PlatformTarget>x64</PlatformTarget>
+    <!-- asInvoker, PerMonitorV2 DPI awareness and long-path support -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Expose internal Services types to the test project -->
+    <InternalsVisibleTo Include="UnpackStation.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Ship 7z.dll and the LGPL license under engines/7z/ next to the executable.
+      SevenZipNative resolves the path from AppContext.BaseDirectory, which points
+      at the exe directory after publishing. Keeping the engine as an external dll
+      also follows the usual LGPL dynamic-linking practice and lets users replace it.
+    -->
+    <None Update="engines\**\*"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
