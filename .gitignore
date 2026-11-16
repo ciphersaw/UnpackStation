@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------
-# Track source files and the required local 7-Zip engine only.
+# Track source files and the required local extraction engines only.
 # Build intermediates, final binaries and release artifacts stay out.
 # ---------------------------------------------------------------
 
@@ -33,9 +33,11 @@ TestResults/
 *.runtimeconfig.dev.json
 *.dll.config
 
-# Exception: the 7-Zip engine and its LGPL license are required at runtime
+# Exception: the extraction engines and their licenses are required at runtime
 !src/engines/7z/x64/7z.dll
 !src/engines/7z/License.txt
+!src/engines/innoextract/x64/innoextract.exe
+!src/engines/innoextract/LICENSE.txt
 
 # Integration-test samples are generated at runtime by tests/TestFixtures.cs
 /tests/Data/

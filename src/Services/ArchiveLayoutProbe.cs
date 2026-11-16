@@ -30,6 +30,14 @@ internal static class ArchiveLayoutProbe
     {
         try
         {
+            // Inno Setup installers are not readable by 7z.dll; let the bundled innoextract
+            // engine list their entries read-only so the default output directory can still be derived.
+            if (string.Equals(Path.GetExtension(exePath), ".exe", StringComparison.OrdinalIgnoreCase) &&
+                InnoSetupExtractor.ContainsSignature(exePath))
+            {
+                return InnoSetupLayoutProbe.TryProbe(exePath, ct);
+            }
+
             return ProbeCore(exePath, ct);
         }
         catch (Exception)

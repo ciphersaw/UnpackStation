@@ -3,25 +3,15 @@
 A portable Windows tool that **extracts** installer packages into a chosen directory
 without ever running the installer.
 
-- `.exe` packages: dynamically loads the bundled `engines/7z/x64/7z.dll` (7-Zip 26.01 x64)
-  and probes NSIS / CAB SFX / generic SFX / 7z / zip by content. No COM registration,
-  no 7-Zip installation required.
+- `.exe` packages: Inno Setup installers are detected by their `Inno Setup Setup Data`
+  signature and extracted with the bundled `engines/innoextract/x64/innoextract.exe`
+  (1.13.0, zlib/libpng license; never runs the setup). Other exe packages dynamically load
+  the bundled `engines/7z/x64/7z.dll` (7-Zip 26.01 x64) and probe NSIS / CAB SFX / generic
+  SFX / 7z / zip by content. No COM registration and no installed 7-Zip are required.
 - `.msi` packages: runs the system `msiexec /a` administrative install so embedded and
   external CAB files are handled correctly.
-- Unsupported formats fail with a clear reason instead of guessing. Inno Setup and
-  InstallShield currently report that they are not supported.
-
-## 7-Zip license notice (required for binary redistribution)
-
-1. **This software uses parts of 7-Zip** (`7z.dll`) through dynamic loading only.
-2. **7-Zip is licensed under the GNU LGPL** (some parts carry the unRAR restriction or
-   use a BSD license).
-3. **7-Zip source code is available at [www.7-zip.org](https://www.7-zip.org).**
-
-Releases ship 7-Zip's `engines/7z/License.txt`; that file is authoritative for
-binary redistribution. The same three statements appear in the application's About
-window. This tool does not use innounp (GPLv3), does not copy UniExtract2 code, and
-has no GPL/AGPL dependencies.
+- Unsupported formats fail with a clear reason instead of guessing; InstallShield still
+  reports that it is not supported.
 
 ## Usage
 
@@ -39,7 +29,11 @@ indeterminate (Marquee) instead of inventing a percentage.
 
 NSIS installers skip the installer's runtime plugins and temporary files
 (`$PLUGINSDIR`, `$TEMP`), so only the files a real installation would produce are
-extracted, with the same directory layout.
+extracted, with the same directory layout. Inno Setup installers use `innoextract -m`
+to exclude temporary files and expose the `app\` payload directly in the chosen output
+directory. The same read-only listing is used when a file is selected, so Inno Setup packages
+also get an automatically derived default output directory instead of falling back to the
+source file's directory.
 
 Safety: path traversal protection (including symlinks and directory junctions),
 decompression-bomb protection (aborts above 20 GB or 100,000 files), Mark of the Web
@@ -86,9 +80,9 @@ by its full path in every command below, for example
 ## Build, run, test and publish
 
 All commands below are run from the repository root and assume the .NET 10 SDK is
-available as `dotnet` (see **Prerequisites** above). Every build copies
-`engines/7z/` into the output directory, so `7z.dll` resolves from
-`AppContext.BaseDirectory` in both the Debug and the published layout.
+available as `dotnet` (see **Prerequisites** above). Every build copies `engines/`
+into the output directory, so both `7z.dll` and `innoextract.exe` resolve from
+`AppContext.BaseDirectory` in the Debug and published layouts.
 
 ### `dotnet run` -- develop and launch
 
@@ -142,37 +136,71 @@ publish/
 ├─ hostfxr.dll / coreclr.dll / ...    # .NET runtime, next to the exe
 ├─ UnpackStation.dll / *.dll          # app and WPF assemblies
 ├─ <language resource folders>/       # satellite resource assemblies
-└─ engines/7z/
-   ├─ License.txt                     # 7-Zip LGPL license text
-   └─ x64/7z.dll                      # 7-Zip engine
+├─ engines/7z/
+│  ├─ License.txt                     # 7-Zip LGPL license text
+│  └─ x64/7z.dll                      # 7-Zip engine
+└─ engines/innoextract/
+   ├─ LICENSE.txt                     # innoextract zlib/libpng license
+   └─ x64/innoextract.exe             # Inno Setup extraction engine
 ```
 
-To produce the distributable zip, run the packaging script after publishing:
+To produce the distributable zip, run the packaging script:
 
 ```bash
 dotnet run PackRelease.cs
 ```
 
-`PackRelease.cs` is a single-file app run by the .NET 10 SDK already needed to build this
-project. It uses only `System.IO.Compression`, so there is no dependency on 7-Zip,
-a PowerShell execution policy or a machine-specific install path. The script
-checks that `publish/` is complete, writes explicit directory entries, replaces
-any previous zip and verifies that the archive root contains `UnpackStation.exe`,
-the license and `7z.dll` with no `publish/` prefix. Use
-`dotnet run PackRelease.cs -- <publishDir> <outputZip>` to override the paths.
+If `publish/` does not exist yet, the script first runs the `dotnet publish` command above
+automatically; if it exists, the current output is reused. `PackRelease.cs` is a single-file
+app run by the .NET 10 SDK already needed to build this project. It uses only BCL APIs, so
+there is no dependency on 7-Zip, a PowerShell execution policy or a machine-specific install
+path. The script checks that `publish/` is complete, writes explicit directory entries,
+replaces any previous zip and verifies that the archive root contains `UnpackStation.exe`,
+both licenses and both engines with no `publish/` prefix. Use
+`dotnet run PackRelease.cs -- <publishDir> <outputZip>` to override the paths; a custom
+publish directory must already exist and is never auto-generated.
 
-`dist/UnpackStation-win-x64.zip` is the resulting artifact (about 61 MiB,
-403 files, 16 folders); both `publish/` and `dist/` are build output and are
-ignored by git, and the zip name carries no version number.
+`dist/UnpackStation-win-x64.zip` is the resulting artifact (about 66 MiB with both
+extraction engines; exact file/folder counts depend on the publish output); both
+`publish/` and `dist/` are build output and are ignored by git, and the zip name
+carries no version number.
 
-`7z.dll` must stay at `engines/7z/x64/7z.dll` relative to the exe (the
-app resolves it from `AppContext.BaseDirectory`). Running the published app needs
-no COM registration and no installed 7-Zip -- the engine is the bundled `7z.dll`,
-which can be replaced as LGPL allows. Only an x64 engine is shipped, so the
-project is pinned to `<PlatformTarget>x64</PlatformTarget>`.
+`7z.dll` must stay at `engines/7z/x64/7z.dll` and `innoextract.exe` at
+`engines/innoextract/x64/innoextract.exe` relative to the exe (the app resolves
+both from `AppContext.BaseDirectory`). Running the published app needs no COM
+registration and no installed 7-Zip -- the engines are bundled and can be replaced
+as their licenses allow. Only x64 engines are shipped, so the project is pinned to
+`<PlatformTarget>x64</PlatformTarget>`.
 
 ## Tests
 
 Integration samples are generated at runtime by `tests/TestFixtures.cs`, so no binary
 test fixtures are tracked in the repository. The few deliberately non-ASCII string
 literals in the test suite are input data for Unicode path handling, not UI text.
+
+## License notices
+
+The same notices are shown in the application's About window. This tool does not use
+innounp (GPLv3), does not copy UniExtract2 code, and has no GPL/AGPL dependencies.
+
+### 7-Zip (LGPL)
+
+1. **This software uses parts of 7-Zip** (`7z.dll`) through dynamic loading only.
+2. **7-Zip is licensed under the GNU LGPL** (some parts carry the unRAR restriction or
+   use a BSD license).
+3. **7-Zip source code is available at [www.7-zip.org](https://www.7-zip.org).**
+
+Releases ship `engines/7z/License.txt`; that file is authoritative for binary
+redistribution of `7z.dll`.
+
+### innoextract (zlib/libpng)
+
+1. **Inno Setup packages are extracted by the bundled `innoextract` 1.13.0** through a
+   child process; the setup executable is never run.
+2. **innoextract is licensed under the zlib/libpng license**, a permissive license that
+   is not GPL/AGPL.
+3. **Source code:** [github.com/crazy-max/innoextract](https://github.com/crazy-max/innoextract),
+   a fork of Daniel Scharrer's innoextract.
+
+Releases ship `engines/innoextract/LICENSE.txt`; that file is authoritative for binary
+redistribution of `innoextract.exe`.

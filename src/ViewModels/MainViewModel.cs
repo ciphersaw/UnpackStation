@@ -332,7 +332,7 @@ public partial class MainViewModel : ObservableObject
         Source file: {SourcePath ?? "Not selected"}
         Output directory: {OutputDir}
         Result: {errorMessage ?? "Success"}
-        Engine: exe uses 7z.dll (7-Zip 26.01 x64), msi uses msiexec /a
+        Engine: Inno Setup uses innoextract 1.13.0, other exe files use 7z.dll (7-Zip 26.01 x64), msi uses msiexec /a
 
         {detail}
         """;

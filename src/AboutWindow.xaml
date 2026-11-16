@@ -27,7 +27,18 @@
                 Background="{DynamicResource {x:Static SystemColors.ControlLightLightBrushKey}}">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel>
-                    <TextBlock Text="7-Zip License Notice" FontWeight="SemiBold" Margin="0,0,0,8"
+                    <TextBlock Text="Supported package formats and engines" FontWeight="SemiBold" Margin="0,0,0,8"
+                               Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}" />
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                               Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"
+                               Text="Inno Setup (.exe): bundled innoextract 1.13.0 reads the installer data directly; the setup is never run." />
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                               Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"
+                               Text="NSIS, CAB SFX, 7z, ZIP and other archive SFX (.exe): bundled 7z.dll detects the format by content signature." />
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,12"
+                               Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"
+                               Text="Windows Installer (.msi): the system msiexec /a administrative install (no bundled engine)." />
+                    <TextBlock Text="7-Zip License Notice (LGPL)" FontWeight="SemiBold" Margin="0,0,0,8"
                                Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}" />
                     <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
                                Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"
@@ -38,9 +49,20 @@
                     <TextBlock TextWrapping="Wrap" Margin="0,0,0,12"
                                Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"
                                Text="3. The 7-Zip source code is available at www.7-zip.org." />
-                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,12"
                                Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
-                               Text="A 7-Zip License.txt is shipped with the release (at engines/7z/License.txt in the program directory); the licensing information required for binary distribution is governed by it." />
+                               Text="The shipped engines/7z/License.txt governs binary redistribution of 7z.dll." />
+                    <TextBlock Text="innoextract License Notice (zlib/libpng)" FontWeight="SemiBold" Margin="0,0,0,8"
+                               Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}" />
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                               Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"
+                               Text="1. Inno Setup extraction uses the bundled innoextract 1.13.0 via a child process; it is not innounp." />
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                               Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"
+                               Text="2. innoextract is licensed under the zlib/libpng license (permissive, not GPL/AGPL)." />
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,12"
+                               Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"
+                               Text="3. Source: github.com/crazy-max/innoextract (fork of Daniel Scharrer's innoextract); the shipped engines/innoextract/LICENSE.txt is authoritative." />
                     <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
                                Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
                                Text="This tool does not use innounp (GPLv3), does not copy UniExtract2 code, and introduces no GPL/AGPL dependencies." />
@@ -52,8 +74,9 @@
         </Border>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
-            <Button Width="150" Height="28" Content="View License.txt" Click="OpenLicense_Click" />
-            <Button Width="80" Height="28" Margin="12,0,0,0" Content="Close" IsCancel="True" Click="Close_Click" />
+            <Button Width="140" Height="28" Content="View 7-Zip License" Click="Open7zLicense_Click" />
+            <Button Width="160" Height="28" Margin="10,0,0,0" Content="View innoextract License" Click="OpenInnoextractLicense_Click" />
+            <Button Width="80" Height="28" Margin="10,0,0,0" Content="Close" IsCancel="True" Click="Close_Click" />
         </StackPanel>
     </Grid>
 </Window>

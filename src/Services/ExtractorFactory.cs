@@ -5,7 +5,10 @@ namespace UnpackStation.Services;
 /// <summary>Chooses the extraction implementation by file type: exe uses 7z.dll, msi uses the system msiexec /a.</summary>
 public static class ExtractorFactory
 {
-    private static readonly IPackageExtractor[] Extractors = [new SevenZipExtractor(), new MsiExtractor()];
+    // Inno Setup must be probed before the generic 7z engine: every setup.exe has an MZ header,
+    // so SevenZipExtractor.CanHandle alone cannot tell an Inno installer from an NSIS/CAB SFX.
+    private static readonly IPackageExtractor[] Extractors =
+        [new InnoSetupExtractor(), new SevenZipExtractor(), new MsiExtractor()];
 
     public static IPackageExtractor Create(string filePath)
     {

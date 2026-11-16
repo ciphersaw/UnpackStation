@@ -28,8 +28,22 @@ public partial class MainWindow : Window
         {
             try
             {
-                // Let Explorer open the folder only; never run any extracted program
-                Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true });
+                // ShellExecute resolves extensionless paths via PATHEXT: "uniclash-setup" can be
+                // mistaken for the neighbouring "uniclash-setup.exe". Open Explorer explicitly and
+                // only when the directory really exists, so no extracted program is ever launched.
+                if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+                {
+                    vm.AppendLog($"Output directory does not exist; not opening: {path}");
+                    return;
+                }
+
+                var fullPath = Path.GetFullPath(path);
+                var startInfo = new ProcessStartInfo("explorer.exe")
+                {
+                    UseShellExecute = true
+                };
+                startInfo.ArgumentList.Add(fullPath);
+                Process.Start(startInfo);
             }
             catch (Exception ex)
             {
@@ -51,7 +65,8 @@ public partial class MainWindow : Window
         DataContext = vm;
 
         _normalBorderBrush = DropZone.BorderBrush;
-        vm.AppendLog("UnpackStation started. exe uses 7z.dll, msi uses msiexec /a for extraction;");
+        vm.AppendLog(
+            "UnpackStation started. Inno Setup uses innoextract, other exe files use 7z.dll, msi uses msiexec /a for extraction;");
         vm.AppendLog("Path traversal checks, decompression bomb protection, and Mark of the Web tagging for executables are enabled.");
     }
 

@@ -39,7 +39,7 @@
                 <TextBlock Text="Drop an installer package here, or click to choose a file"
                            FontSize="20" HorizontalAlignment="Center"
                            Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}" />
-                <TextBlock Text="Supports .exe / .msi"
+                <TextBlock Text="Supports Inno Setup, NSIS, 7z / ZIP / CAB SFX (.exe) and MSI (.msi)"
                            FontSize="13" Margin="0,8,0,0" HorizontalAlignment="Center"
                            Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
             </StackPanel>
@@ -79,7 +79,8 @@
                         Command="{Binding StartCommand}" />
                 <Button Width="80" Height="30" Margin="12,0,0,0" Content="Cancel"
                         Command="{Binding CancelCommand}" IsEnabled="{Binding CanCancel}" />
-                <Button Width="120" Height="30" Margin="12,0,0,0" Content="Open output directory"
+                <Button Height="30" MinWidth="160" Padding="12,3" Margin="12,0,0,0"
+                        Content="Open output directory"
                         Command="{Binding OpenOutputCommand}" />
                 <Button Width="70" Height="30" Margin="12,0,0,0" Content="About"
                         Click="About_Click" />

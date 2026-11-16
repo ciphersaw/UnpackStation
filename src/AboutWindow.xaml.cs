@@ -4,7 +4,7 @@ using System.Windows;
 
 namespace UnpackStation;
 
-/// <summary>About page: the LGPL notice is a hard requirement for shipping 7z.dll and must stay visible.</summary>
+/// <summary>About page: engine/license notices for 7z.dll (LGPL) and innoextract (zlib/libpng) must stay visible.</summary>
 public partial class AboutWindow : Window
 {
     public AboutWindow()
@@ -12,12 +12,18 @@ public partial class AboutWindow : Window
         InitializeComponent();
     }
 
-    private void OpenLicense_Click(object sender, RoutedEventArgs e)
+    private void Open7zLicense_Click(object sender, RoutedEventArgs e) =>
+        OpenLicense(Path.Combine("engines", "7z", "License.txt"), "7-Zip");
+
+    private void OpenInnoextractLicense_Click(object sender, RoutedEventArgs e) =>
+        OpenLicense(Path.Combine("engines", "innoextract", "LICENSE.txt"), "innoextract");
+
+    private void OpenLicense(string relativePath, string engineName)
     {
-        var license = Path.Combine(AppContext.BaseDirectory, "engines", "7z", "License.txt");
+        var license = Path.Combine(AppContext.BaseDirectory, relativePath);
         if (!File.Exists(license))
         {
-            MessageBox.Show(this, "The bundled License.txt could not be found.", "About UnpackStation",
+            MessageBox.Show(this, $"The bundled {engineName} license file could not be found.", "About UnpackStation",
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -29,7 +35,7 @@ public partial class AboutWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, $"Failed to open the license file: {ex.Message}", "About UnpackStation",
+            MessageBox.Show(this, $"Failed to open the {engineName} license file: {ex.Message}", "About UnpackStation",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }

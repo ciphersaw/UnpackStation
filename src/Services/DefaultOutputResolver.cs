@@ -106,7 +106,7 @@ internal static class DefaultOutputResolver
             return new DefaultOutputPlan(fallback, notes);
         }
 
-        notes.Add($"Identified as a {layout.FormatName} package; inspected {layout.InspectedEntryCount} entries");
+        notes.Add($"Identified as {layout.FormatName} package; inspected {layout.InspectedEntryCount} entries");
 
         // If there is a single top-level directory, use the real directory name from the package (App); when the install path cannot be read, fall back to the package file name
         string? leaf;
@@ -118,7 +118,9 @@ internal static class DefaultOutputResolver
         else
         {
             leaf = Path.GetFileNameWithoutExtension(sourcePath);
-            notes.Add("Package files are scattered at the root with no single top-level directory (EXE cannot read the install path)");
+            notes.Add(string.Equals(layout.FormatName, "Inno Setup", StringComparison.OrdinalIgnoreCase)
+                ? "Inno Setup payload files sit directly under the install root with no single top-level directory"
+                : "Package files are scattered at the root with no single top-level directory (EXE cannot read the install path)");
         }
 
         var decision = DecideOutputDir(fallback, leaf, out var reason);

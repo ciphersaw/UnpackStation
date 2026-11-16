@@ -10,6 +10,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -24,13 +25,64 @@ string[] required =
 {
     "UnpackStation.exe",
     "engines/7z/License.txt",
-    "engines/7z/x64/7z.dll"
+    "engines/7z/x64/7z.dll",
+    "engines/innoextract/LICENSE.txt",
+    "engines/innoextract/x64/innoextract.exe"
 };
 
-if (!Directory.Exists(publishDir))
+if (!Directory.Exists(publishDir) && args.Length == 0)
+{
+    // Make the documented one-liner self-contained: publish first, then zip the fresh output.
+    // A caller-supplied publish directory is never auto-generated, because its layout is the caller's responsibility.
+    string dotnet = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet";
+    Console.WriteLine("Publish directory not found; publishing with " + dotnet + " …");
+
+    ProcessStartInfo startInfo = new(dotnet)
+    {
+        WorkingDirectory = Directory.GetCurrentDirectory(),
+        UseShellExecute = false,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true
+    };
+    startInfo.ArgumentList.Add("publish");
+    startInfo.ArgumentList.Add("src/UnpackStation.csproj");
+    startInfo.ArgumentList.Add("-c");
+    startInfo.ArgumentList.Add("Release");
+    startInfo.ArgumentList.Add("-r");
+    startInfo.ArgumentList.Add("win-x64");
+    startInfo.ArgumentList.Add("--self-contained");
+    startInfo.ArgumentList.Add("true");
+    startInfo.ArgumentList.Add("-o");
+    startInfo.ArgumentList.Add(publishDir);
+
+    using Process publish = Process.Start(startInfo)
+        ?? throw new InvalidOperationException("Cannot start dotnet publish.");
+    Task<string> stdout = publish.StandardOutput.ReadToEndAsync();
+    Task<string> stderr = publish.StandardError.ReadToEndAsync();
+    await publish.WaitForExitAsync();
+    int publishExitCode = publish.ExitCode;
+    string publishOutput = await stdout;
+    string publishError = await stderr;
+
+    if (!string.IsNullOrWhiteSpace(publishOutput))
+    {
+        Console.WriteLine(publishOutput.Trim());
+    }
+
+    if (publishExitCode != 0)
+    {
+        Console.Error.WriteLine("dotnet publish failed with exit code " + publishExitCode + ".");
+        if (!string.IsNullOrWhiteSpace(publishError))
+        {
+            Console.Error.WriteLine(publishError.Trim());
+        }
+
+        return publishExitCode;
+    }
+}
+else if (!Directory.Exists(publishDir))
 {
     Console.Error.WriteLine("Publish directory not found: " + Path.GetFullPath(publishDir));
-    Console.Error.WriteLine("Run 'dotnet publish src/UnpackStation.csproj -c Release -r win-x64 --self-contained true -o publish' first.");
     return 1;
 }
 

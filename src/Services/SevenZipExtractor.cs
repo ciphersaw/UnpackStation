@@ -16,7 +16,7 @@ public sealed class SevenZipExtractor : IPackageExtractor
     private const string EncryptedMessage = "This installer package is encrypted and requires a password";
     private const string UnrecognizedMessage =
         "Could not recognize the packaging format of this exe " +
-        "(possibly Inno Setup or InstallShield, which are not supported)";
+        "(possibly InstallShield or another unsupported format)";
 
     // An SFX PE header is usually only a few hundred KB; limit the signature scan range to avoid a full scan of GB-sized files
     private const long MaxSignatureScan = 16L * 1024 * 1024;
@@ -213,7 +213,7 @@ public sealed class SevenZipExtractor : IPackageExtractor
                 {
                     diag.AppendLine(
                         $"7-Zip could only open as {string.Join(", ", imageOnlyMatches)} (executable image / disk image / single-stream compression); skipped, image sections are not extracted.");
-                    diag.AppendLine("Such exe files are usually Inno Setup, InstallShield, or a setup.exe wrapping an MSI.");
+                    diag.AppendLine("Such exe files are usually InstallShield or a setup.exe wrapping an MSI.");
                 }
 
                 return Fail(UnrecognizedMessage, lastHr);
