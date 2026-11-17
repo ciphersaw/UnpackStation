@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using UnpackStation.Models;
 using UnpackStation.Services;
 using Xunit;
 
@@ -353,9 +354,9 @@ public class MsiExtractorTests : IDisposable
         Assert.True(File.Exists(Path.Combine(output, "sub", "app.dll")));
         Assert.Contains("Exit code: 0", result.Diagnostic);
         Assert.Contains("Command line", result.Diagnostic);
-        Assert.Contains(progress.Reports, r => r.percent == 100);
+        Assert.Contains(progress.Reports, r => r.Percent == 100);
         // When real progress is unavailable, only Marquee and 100% are allowed; do not fabricate intermediate percentages
-        Assert.DoesNotContain(progress.Reports, r => r.percent is > 0 and < 100);
+        Assert.DoesNotContain(progress.Reports, r => r.Percent is > 0 and < 100);
     }
 
     [Fact]
@@ -369,7 +370,7 @@ public class MsiExtractorTests : IDisposable
 
         Assert.True(result.Success, result.Diagnostic);
         Assert.Contains("3010", result.Diagnostic);
-        Assert.Contains(progress.Reports, r => r.message.Contains("a restart is required"));
+        Assert.Contains(progress.Reports, r => r.Detail.Contains("a restart is required"));
     }
 
     [Fact]
@@ -583,8 +584,8 @@ public class MsiExtractorTests : IDisposable
             Path.Combine(_root, "fake.msi"), output, progress, CancellationToken.None);
 
         Assert.True(result.Success, result.Diagnostic);
-        Assert.Contains(progress.Reports, p => p.percent > 0 && p.percent < 100);
-        Assert.Contains(progress.Reports, p => p.percent == 100);
+        Assert.Contains(progress.Reports, p => p.Percent > 0 && p.Percent < 100);
+        Assert.Contains(progress.Reports, p => p.Percent == 100);
         Assert.Contains("Progress denominator", result.Diagnostic);
     }
 
@@ -610,15 +611,15 @@ public class MsiExtractorTests : IDisposable
             Path.Combine(_root, "fake.msi"), output, progress, CancellationToken.None);
 
         Assert.True(result.Success, result.Diagnostic);
-        Assert.DoesNotContain(progress.Reports, p => p.percent > 0 && p.percent < 100);
+        Assert.DoesNotContain(progress.Reports, p => p.Percent > 0 && p.Percent < 100);
         Assert.Contains("progress stays indeterminate", result.Diagnostic);
     }
 
-    private sealed class CollectingProgress : IProgress<(int percent, string message)>
+    private sealed class CollectingProgress : IProgress<ExtractionProgress>
     {
-        internal List<(int percent, string message)> Reports { get; } = new();
+        internal List<ExtractionProgress> Reports { get; } = new();
 
-        public void Report((int percent, string message) value)
+        public void Report(ExtractionProgress value)
         {
             lock (Reports)
             {

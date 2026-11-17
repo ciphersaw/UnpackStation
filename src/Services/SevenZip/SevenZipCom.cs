@@ -1,6 +1,7 @@
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
+using UnpackStation.Models;
 
 namespace UnpackStation.Services.SevenZip;
 
@@ -299,7 +300,7 @@ internal sealed class OutStreamWrapper : ISequentialOutStream, IDisposable
 internal sealed class ExtractCallback : IArchiveExtractCallback, IDisposable
 {
     private readonly IReadOnlyDictionary<uint, string> _targets;
-    private readonly IProgress<(int percent, string message)> _progress;
+    private readonly IProgress<ExtractionProgress> _progress;
     private readonly CancellationToken _ct;
     private readonly ulong _totalBytes;
     private readonly ExtractionBudget _budget;
@@ -313,7 +314,7 @@ internal sealed class ExtractCallback : IArchiveExtractCallback, IDisposable
 
     internal ExtractCallback(
         IReadOnlyDictionary<uint, string> targets,
-        IProgress<(int percent, string message)> progress,
+        IProgress<ExtractionProgress> progress,
         CancellationToken ct,
         ulong totalBytes,
         ExtractionBudget budget)
@@ -327,6 +328,14 @@ internal sealed class ExtractCallback : IArchiveExtractCallback, IDisposable
 
     public int SetTotal(ulong total) => HResults.SOk;
 
+    private static string FormatBytes(ulong bytes) => bytes switch
+    {
+        >= 1024UL * 1024UL * 1024UL => $"{bytes / (1024d * 1024d * 1024d):0.00} GB",
+        >= 1024UL * 1024UL => $"{bytes / (1024d * 1024d):0.0} MB",
+        >= 1024UL => $"{bytes / 1024d:0.0} KB",
+        _ => $"{bytes} B"
+    };
+
     public int SetCompleted(IntPtr completeValue)
     {
         if (_ct.IsCancellationRequested || _budget.Exceeded)
@@ -337,13 +346,14 @@ internal sealed class ExtractCallback : IArchiveExtractCallback, IDisposable
         if (completeValue != IntPtr.Zero && _totalBytes > 0)
         {
             var done = unchecked((ulong)Marshal.ReadInt64(completeValue));
-            var percent = (int)Math.Min(100, done * 100 / _totalBytes);
-            _progress.Report((percent, $"Extracting … {percent}%"));
+            var percent = (int)Math.Min(99, done * 100 / _totalBytes);
+            var detail = $"{FormatBytes(Math.Min(done, _totalBytes))} / {FormatBytes(_totalBytes)}";
+            _progress.Report(new ExtractionProgress(percent, ExtractionStage.Extracting, detail));
         }
         else
         {
             // When the total size is unknown, do not fabricate a percentage; let the UI use Marquee
-            _progress.Report((-1, "Extracting …"));
+            _progress.Report(new ExtractionProgress(-1, ExtractionStage.Extracting, "Byte size unknown"));
         }
 
         return HResults.SOk;

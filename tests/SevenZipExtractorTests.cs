@@ -1,4 +1,5 @@
 using System.IO;
+using UnpackStation.Models;
 using UnpackStation.Services;
 using UnpackStation.Services.SevenZip;
 using Xunit;
@@ -63,7 +64,7 @@ public class SevenZipExtractorTests : IDisposable
         Assert.Equal(2, result.FileCount);
         Assert.Equal("hello unpackstation", File.ReadAllText(Path.Combine(output, "readme.txt")).Trim());
         Assert.True(File.Exists(Path.Combine(output, "sub", "app.dll")));
-        Assert.Contains(progress.Reports, r => r.percent == 100);
+        Assert.Contains(progress.Reports, r => r.Percent == 100);
         Assert.Contains("Identified format", result.Diagnostic);
     }
 
@@ -294,11 +295,11 @@ public class SevenZipExtractorTests : IDisposable
         Assert.Contains("Mark of the Web", result.Diagnostic);
     }
 
-    private sealed class CollectingProgress : IProgress<(int percent, string message)>
+    private sealed class CollectingProgress : IProgress<ExtractionProgress>
     {
-        internal List<(int percent, string message)> Reports { get; } = new();
+        internal List<ExtractionProgress> Reports { get; } = new();
 
-        public void Report((int percent, string message) value)
+        public void Report(ExtractionProgress value)
         {
             lock (Reports)
             {

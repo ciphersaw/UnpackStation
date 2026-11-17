@@ -22,10 +22,12 @@ The default output directory is derived from the package's own install location 
 points to **the directory that actually contains the extracted result**. Files that
 already exist in the output directory are skipped and never overwritten.
 
-Progress: `.exe` reports the number of bytes actually written. `.msi` uses the MSI
-`File` table row count as the denominator and the files already written to the staging
-directory as the numerator; if the `File` table cannot be read, the bar stays
-indeterminate (Marquee) instead of inventing a percentage.
+Progress uses one unified themed bar (phase label + percentage + detail text) for all
+engines. Each engine keeps its natural measurement unit: Inno Setup counts staged files
+against the `innoextract --list` entry count, MSI uses the `File` table row count as the
+denominator, and 7z reports bytes written via the archive callback. If a denominator
+cannot be read, the bar stays indeterminate (Marquee) instead of inventing a percentage.
+Progress logs are throttled to one line every 5% regardless of the engine.
 
 NSIS installers skip the installer's runtime plugins and temporary files
 (`$PLUGINSDIR`, `$TEMP`), so only the files a real installation would produce are

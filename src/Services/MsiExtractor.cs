@@ -72,7 +72,7 @@ public sealed class MsiExtractor : IPackageExtractor
     public Task<ExtractResult> ExtractAsync(
         string sourcePath,
         string outputDir,
-        IProgress<(int percent, string message)> progress,
+        IProgress<ExtractionProgress> progress,
         CancellationToken ct)
     {
         // Process waiting is asynchronous, but directory snapshots, log reading, and cleanup deletion are synchronous IO; run everything on a background thread to avoid freezing the UI
@@ -115,7 +115,7 @@ public sealed class MsiExtractor : IPackageExtractor
     private async Task<ExtractResult> ExtractCoreAsync(
         string sourcePath,
         string outputDir,
-        IProgress<(int percent, string message)> progress,
+        IProgress<ExtractionProgress> progress,
         CancellationToken ct)
     {
         var diag = new StringBuilder();
@@ -205,7 +205,7 @@ public sealed class MsiExtractor : IPackageExtractor
             }
 
             diag.AppendLine($"Command line: {startInfo.FileName} {startInfo.Arguments}");
-            progress.Report((-1, "Running a system Windows Installer administrative install for extraction …"));
+            progress.Report(new ExtractionProgress(-1, ExtractionStage.Extracting, "System Windows Installer administrative install …"));
 
             // msiexec /a is a separate process, so the internal INSTALLMESSAGE_PROGRESS callback of Windows Installer cannot be obtained;
             // but it writes files into the staging directory one by one, so "files written to disk / File table entry count" is used as the real progress.
@@ -307,11 +307,11 @@ public sealed class MsiExtractor : IPackageExtractor
 
             if (exitCode == 3010)
             {
-                progress.Report((-1, "Warning: the system indicates a restart is required to finish configuration, but the files have been extracted."));
+                progress.Report(new ExtractionProgress(-1, ExtractionStage.Organizing, "Warning: the system indicates a restart is required to finish configuration, but the files have been extracted."));
                 diag.AppendLine("msiexec returned 3010: success but a restart is required");
             }
 
-            progress.Report((-1, "Organizing the output directory …"));
+            progress.Report(new ExtractionProgress(-1, ExtractionStage.Organizing, "Organizing the output directory …"));
             RemoveAdminMsiCopy(stageDir, Path.GetFileName(Path.GetFullPath(sourcePath)), diag);
             diag.AppendLine("Keeping the directory structure shipped with the installer package (no extra flattening of levels)");
 
@@ -345,7 +345,7 @@ public sealed class MsiExtractor : IPackageExtractor
             progressCts.Cancel();
             await StopProgressPollingAsync(progressTask, diag);
 
-            progress.Report((100, $"Done, {newFiles.Count} files"));
+            progress.Report(new ExtractionProgress(100, ExtractionStage.Completed, $"{newFiles.Count} files"));
             return new ExtractResult(true, root, newFiles.Count, null, diag.ToString());
         }
         finally
@@ -375,13 +375,13 @@ public sealed class MsiExtractor : IPackageExtractor
     /// Every 250 ms, counts the files already written to disk in the staging directory and reports real progress to the UI.
     /// An administrative install copies the source msi itself into the staging directory root; exclude it by file name so it is not counted as install content.
     /// Enumeration may throw mid-way while msiexec is rewriting the directory; just skip this round and wait for the next, without affecting extraction.
-    /// The message starts with "Extracting" and reuses MainViewModel's log throttling of one line every 5%.
+    /// The structured report carries an Extracting stage; MainViewModel throttles progress logs to one line every 5%.
     /// </summary>
     private static async Task PollStageProgressAsync(
         string stageDir,
         int expected,
         string msiFileName,
-        IProgress<(int percent, string message)> progress,
+        IProgress<ExtractionProgress> progress,
         CancellationToken ct)
     {
         const int intervalMs = 250;
@@ -410,8 +410,8 @@ public sealed class MsiExtractor : IPackageExtractor
                     if (percent > lastPercent)
                     {
                         lastPercent = percent;
-                        progress.Report((percent,
-                            $"Extracting msi: extracted {Math.Min(count, expected)} / {expected} files"));
+                        progress.Report(new ExtractionProgress(percent, ExtractionStage.Extracting,
+                            $"{Math.Min(count, expected)} / {expected} files"));
                     }
                 }
 

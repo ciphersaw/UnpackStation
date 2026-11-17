@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using UnpackStation.Models;
 using UnpackStation.Services;
 
 namespace UnpackStation.ViewModels;
@@ -28,6 +29,8 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private string outputDir = string.Empty;
     [ObservableProperty] private int progressValue;
     [ObservableProperty] private bool isProgressIndeterminate;
+    [ObservableProperty] private string progressText = "—";
+    [ObservableProperty] private string stageText = "Ready";
     [ObservableProperty] private string statusText = "Ready";
 
     [ObservableProperty]
@@ -241,14 +244,16 @@ public partial class MainViewModel : ObservableObject
         CanOpenOutput = false;
         ProgressValue = 0;
         IsProgressIndeterminate = true;
-        StatusText = "Extracting";
+        ProgressText = "—";
+        StageText = "Preparing";
+        StatusText = string.Empty;
         _lastProgressBucket = -1;
         _lastStatusMessage = string.Empty;
 
         using var cts = new CancellationTokenSource();
         _cts = cts;
         // Progress<T> is constructed on the UI thread, so its callback is marshaled back to the UI thread; log/progress updates never touch controls across threads
-        var progress = new Progress<(int percent, string message)>(OnProgress);
+        var progress = new Progress<ExtractionProgress>(OnProgress);
 
         try
         {
@@ -261,7 +266,9 @@ public partial class MainViewModel : ObservableObject
             if (result.Success)
             {
                 ProgressValue = 100;
-                StatusText = "Extraction complete";
+                ProgressText = "100%";
+                StageText = "Completed";
+                StatusText = $"{result.FileCount} files";
                 CanOpenOutput = true;
                 AppendLog($"Done, {result.FileCount} files");
                 AppendLog("Output directory: " + result.OutputDir);
@@ -269,6 +276,8 @@ public partial class MainViewModel : ObservableObject
             }
 
             ProgressValue = 0;
+            ProgressText = "—";
+            StageText = "Failed";
             StatusText = "Extraction failed";
             AppendLog("Failed: " + result.ErrorMessage);
             if (!string.IsNullOrWhiteSpace(result.Diagnostic))
@@ -283,6 +292,8 @@ public partial class MainViewModel : ObservableObject
         }
         catch (NotSupportedException ex)
         {
+            ProgressText = "—";
+            StageText = "Failed";
             StatusText = "Not supported";
             LastDiagnostic = ComposeDiagnostic(ex.Message, ex.ToString());
             AppendLog("Cannot extract: " + ex.Message);
@@ -290,6 +301,8 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
+            ProgressText = "—";
+            StageText = "Failed";
             StatusText = "Extraction failed";
             LastDiagnostic = ComposeDiagnostic("Unhandled exception", ex.ToString());
             AppendLog($"Unhandled exception: {ex.Message}");
@@ -337,37 +350,42 @@ public partial class MainViewModel : ObservableObject
         {detail}
         """;
 
-    private void OnProgress((int percent, string message) report)
+    private void OnProgress(ExtractionProgress report)
     {
-        if (report.percent < 0)
+        if (report.Percent < 0)
         {
             // When progress cannot be determined, the bar uses Marquee; do not fabricate a percentage
             IsProgressIndeterminate = true;
+            ProgressText = "—";
         }
         else
         {
             IsProgressIndeterminate = false;
-            ProgressValue = Math.Clamp(report.percent, 0, 100);
+            ProgressValue = Math.Clamp(report.Percent, 0, 100);
+            ProgressText = $"{ProgressValue}%";
         }
 
-        var message = report.message;
+        StageText = report.Stage.ToString();
+        var message = report.Detail;
         if (message.StartsWith("Warning:", StringComparison.Ordinal))
         {
+            StatusText = message;
             AppendLog(message);
             return;
         }
 
-        if (report.percent >= 0 && message.StartsWith("Extracting", StringComparison.Ordinal))
+        StatusText = message;
+        if (report.Percent >= 0)
         {
-            // Progress callbacks are dense; log one line every 5% to avoid flooding the log
-            var bucket = report.percent / 5;
+            // Progress callbacks are dense; log one line every 5%, regardless of the engine's measurement unit
+            var bucket = report.Percent / 5;
             if (bucket == _lastProgressBucket)
             {
                 return;
             }
 
             _lastProgressBucket = bucket;
-            AppendLog(message);
+            AppendLog($"{report.Stage} · {message}");
             return;
         }
 
@@ -377,7 +395,7 @@ public partial class MainViewModel : ObservableObject
         }
 
         _lastStatusMessage = message;
-        AppendLog(message);
+        AppendLog($"{report.Stage} · {message}");
     }
 
     private static bool IsSupported(string extension) =>

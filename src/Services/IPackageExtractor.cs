@@ -8,10 +8,13 @@ public interface IPackageExtractor
     /// <summary>Whether this engine can handle the file (by extension plus the first few bytes of the header).</summary>
     bool CanHandle(string filePath);
 
-    /// <summary>Extracts. The progress percent is 0-100; -1 means progress cannot be determined.</summary>
+    /// <summary>
+    /// Extracts. Progress is reported as a structured <see cref="ExtractionProgress"/>:
+    /// Percent is -1 when indeterminate, 0..99 while working, and 100 only on completion.
+    /// </summary>
     Task<ExtractResult> ExtractAsync(
         string sourcePath,
         string outputDir,
-        IProgress<(int percent, string message)> progress,
+        IProgress<ExtractionProgress> progress,
         CancellationToken ct);
 }

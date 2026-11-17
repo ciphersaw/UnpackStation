@@ -7,6 +7,47 @@
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
 
+    <Window.Resources>
+        <SolidColorBrush x:Key="ProgressTrackBrush" Color="#E8ECF1" />
+        <Style x:Key="ThemedProgressBarStyle" TargetType="{x:Type ProgressBar}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ProgressBar}">
+                        <Grid SnapsToDevicePixels="True">
+                            <Border x:Name="TrackBorder"
+                                    Background="{StaticResource ProgressTrackBrush}"
+                                    BorderBrush="#D3D9E0" BorderThickness="1"
+                                    CornerRadius="9" ClipToBounds="True" />
+                            <Grid Margin="2">
+                                <Rectangle x:Name="PART_Track" Fill="Transparent" />
+                                <Decorator x:Name="PART_Indicator" HorizontalAlignment="Left">
+                                    <Border CornerRadius="7">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                <GradientStop Color="#0078D4" Offset="0" />
+                                                <GradientStop Color="#3FA0E8" Offset="1" />
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                    </Border>
+                                </Decorator>
+                            </Grid>
+                            <TextBlock Text="{TemplateBinding Tag}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"
+                                       IsHitTestVisible="False" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsIndeterminate" Value="True">
+                                <Setter TargetName="TrackBorder" Property="BorderBrush" Value="#BBD3E8" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <!-- Top half: drag-and-drop target -->
@@ -87,14 +128,25 @@
             </StackPanel>
         </Grid>
 
-        <DockPanel Grid.Row="2" Margin="0,14,0,0">
-            <TextBlock DockPanel.Dock="Right" Margin="12,0,0,0" VerticalAlignment="Center"
-                       Text="{Binding StatusText}"
-                       Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
-            <ProgressBar Height="16" Minimum="0" Maximum="100"
+        <Grid Grid.Row="2" Margin="0,14,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <DockPanel Grid.Row="0" Margin="0,0,0,6" LastChildFill="False">
+                <TextBlock DockPanel.Dock="Left"
+                           Text="{Binding StageText}" FontWeight="SemiBold" FontSize="12"
+                           Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}" />
+                <TextBlock DockPanel.Dock="Right" Margin="12,0,0,0"
+                           Text="{Binding StatusText}" TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+            </DockPanel>
+            <ProgressBar Grid.Row="1" Height="22" Minimum="0" Maximum="100"
+                         Tag="{Binding ProgressText, Mode=OneWay}"
                          Value="{Binding ProgressValue, Mode=OneWay}"
-                         IsIndeterminate="{Binding IsProgressIndeterminate}" />
-        </DockPanel>
+                         IsIndeterminate="{Binding IsProgressIndeterminate}"
+                         Style="{StaticResource ThemedProgressBarStyle}" />
+        </Grid>
 
         <DockPanel Grid.Row="3" Margin="0,14,0,6">
             <Button DockPanel.Dock="Right" Padding="12,2" Content="Copy diagnostic information"

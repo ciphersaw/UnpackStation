@@ -69,7 +69,7 @@ public sealed class SevenZipExtractor : IPackageExtractor
     public Task<ExtractResult> ExtractAsync(
         string sourcePath,
         string outputDir,
-        IProgress<(int percent, string message)> progress,
+        IProgress<ExtractionProgress> progress,
         CancellationToken ct)
     {
         // All 7z.dll calls are blocking COM calls; they must run on a background thread so the UI does not freeze
@@ -79,7 +79,7 @@ public sealed class SevenZipExtractor : IPackageExtractor
     private static ExtractResult ExtractCore(
         string sourcePath,
         string outputDir,
-        IProgress<(int percent, string message)> progress,
+        IProgress<ExtractionProgress> progress,
         CancellationToken ct)
     {
         var diag = new StringBuilder();
@@ -129,7 +129,7 @@ public sealed class SevenZipExtractor : IPackageExtractor
         try
         {
             ct.ThrowIfCancellationRequested();
-            progress.Report((-1, "Loading the 7-Zip engine …"));
+            progress.Report(new ExtractionProgress(-1, ExtractionStage.Preparing, "Loading the 7-Zip engine …"));
             SevenZipNative.EnsureLoaded();
             diag.AppendLine($"Engine path: {SevenZipNative.LibraryPath}");
 
@@ -144,7 +144,7 @@ public sealed class SevenZipExtractor : IPackageExtractor
             rootCreated = !Directory.Exists(root);
             CreateDirectoryTracked(root, root, createdDirs);
 
-            progress.Report((-1, "Detecting the packaging format …"));
+            progress.Report(new ExtractionProgress(-1, ExtractionStage.Preparing, "Detecting the packaging format …"));
             var formats = OrderForProbing(SevenZipNative.EnumerateFormats());
             diag.AppendLine($"7-Zip has {formats.Count} available formats, {formats.Count(f => IsInstallerFormat(f.Name))} installer/archive formats");
             string? matchedFormat = null;
@@ -219,7 +219,7 @@ public sealed class SevenZipExtractor : IPackageExtractor
                 return Fail(UnrecognizedMessage, lastHr);
             }
 
-            progress.Report((-1, $"Identified as a {matchedFormat} installer package"));
+            progress.Report(new ExtractionProgress(-1, ExtractionStage.Preparing, $"Identified as a {matchedFormat} installer package"));
             diag.AppendLine($"Identified format: {matchedFormat}");
 
             // Read entries one by one and validate target paths before allowing 7-Zip to write any file
@@ -383,7 +383,7 @@ public sealed class SevenZipExtractor : IPackageExtractor
 
             foreach (var warning in warnings)
             {
-                progress.Report((-1, "Warning: " + warning));
+                progress.Report(new ExtractionProgress(-1, ExtractionStage.Preparing, "Warning: " + warning));
                 diag.AppendLine("Warning: " + warning);
             }
 
@@ -448,9 +448,10 @@ public sealed class SevenZipExtractor : IPackageExtractor
             }
 
             // Only tag executables actually written this run with Mark of the Web; never touch the user's existing files
+            progress.Report(new ExtractionProgress(-1, ExtractionStage.Organizing, "Finalizing extracted files …"));
             MarkOfTheWeb.Apply(callback.WrittenFiles, diag);
 
-            progress.Report((100, $"Done, {callback.WrittenFileCount} files"));
+            progress.Report(new ExtractionProgress(100, ExtractionStage.Completed, $"{callback.WrittenFileCount} files"));
             return new ExtractResult(true, root, callback.WrittenFileCount, null, diag.ToString());
         }
         catch (OperationCanceledException)

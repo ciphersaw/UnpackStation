@@ -45,7 +45,7 @@ public sealed class InnoSetupExtractor : IPackageExtractor
     public Task<ExtractResult> ExtractAsync(
         string sourcePath,
         string outputDir,
-        IProgress<(int percent, string message)> progress,
+        IProgress<ExtractionProgress> progress,
         CancellationToken ct)
     {
         return Task.Run(() => ExtractCore(sourcePath, outputDir, progress, ct));
@@ -117,7 +117,7 @@ public sealed class InnoSetupExtractor : IPackageExtractor
     private static async Task<ExtractResult> ExtractCore(
         string sourcePath,
         string outputDir,
-        IProgress<(int percent, string message)> progress,
+        IProgress<ExtractionProgress> progress,
         CancellationToken ct)
     {
         var diag = new StringBuilder();
@@ -260,7 +260,7 @@ public sealed class InnoSetupExtractor : IPackageExtractor
         startInfo.ArgumentList.Add(Path.GetFullPath(sourcePath));
 
         diag.AppendLine($"Command line: {engine} -d \"{stageDir}\" -m -n --progress=0 --silent \"{Path.GetFullPath(sourcePath)}\"");
-        progress.Report((-1, "Extracting Inno Setup package with innoextract …"));
+        progress.Report(new ExtractionProgress(-1, ExtractionStage.Extracting, "Inno Setup package with innoextract …"));
 
         using var process = new Process { StartInfo = startInfo };
         var stdoutTask = Task.FromResult(string.Empty);
@@ -291,7 +291,8 @@ public sealed class InnoSetupExtractor : IPackageExtractor
 
                     var written = CountStagedFiles(stageDir);
                     var percent = (int)Math.Min(99, written * 100L / expectedFileCount.Value);
-                    progress.Report((percent, $"Extracted {written} of {expectedFileCount.Value} files"));
+                    progress.Report(new ExtractionProgress(percent, ExtractionStage.Extracting,
+                        $"{written} / {expectedFileCount.Value} files"));
                 }
 
                 await waitTask;
@@ -332,7 +333,7 @@ public sealed class InnoSetupExtractor : IPackageExtractor
             return Fail("Extraction failed; see the diagnostic information.");
         }
 
-        progress.Report((-1, "Organizing the output directory …"));
+        progress.Report(new ExtractionProgress(-1, ExtractionStage.Organizing, "Organizing the output directory …"));
 
         var bomb = CheckStagedContent(stageDir, diag);
         if (bomb is not null)
@@ -354,7 +355,7 @@ public sealed class InnoSetupExtractor : IPackageExtractor
 
         MarkOfTheWeb.Apply(movedFiles, diag);
         CleanupStage();
-        progress.Report((100, $"Done, {movedFiles.Count} files"));
+        progress.Report(new ExtractionProgress(100, ExtractionStage.Completed, $"{movedFiles.Count} files"));
         return new ExtractResult(true, root, movedFiles.Count, null, diag.ToString());
     }
 
