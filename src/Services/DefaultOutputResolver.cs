@@ -1,9 +1,16 @@
 using System.IO;
+using UnpackStation.Models;
 
 namespace UnpackStation.Services;
 
-/// <summary>Probe result: the final default output directory plus notes shown to the user one by one.</summary>
-internal sealed record DefaultOutputPlan(string OutputDir, IReadOnlyList<string> Notes);
+/// <summary>
+/// Probe result: the final default output directory, notes for the log,
+/// and structured information shown in the package-info card.
+/// </summary>
+internal sealed record DefaultOutputPlan(
+    string OutputDir,
+    IReadOnlyList<string> Notes,
+    PackageInspectionInfo? Info = null);
 
 /// <summary>
 /// Computes the "final" default output directory: first read the package's default install location / entry structure,
@@ -28,7 +35,10 @@ internal static class DefaultOutputResolver
         catch (Exception ex)
         {
             // If the path itself is invalid, let the UI handle it; return an empty string here so later validation catches it
-            return new DefaultOutputPlan(string.Empty, new[] { $"Cannot compute the default output directory: {ex.Message}" });
+            return new DefaultOutputPlan(
+                string.Empty,
+                new[] { $"Cannot compute the default output directory: {ex.Message}" },
+                new PackageInspectionInfo { Decision = "Unavailable", Warning = ex.Message });
         }
 
         try
@@ -41,7 +51,15 @@ internal static class DefaultOutputResolver
             if (!string.Equals(fallback, parentDir, StringComparison.OrdinalIgnoreCase))
             {
                 notes.Add("The source file is at a drive root; using a separate output directory avoids scattering files at the root (conservative fallback, no extra layer added)");
-                return new DefaultOutputPlan(fallback, notes);
+                return new DefaultOutputPlan(
+                    fallback,
+                    notes,
+                    new PackageInspectionInfo
+                    {
+                        Format = FormatFromExtension(fullPath),
+                        Decision = "Kept source directory",
+                        Warning = "Source file is at a drive root"
+                    });
             }
 
             var extension = Path.GetExtension(fullPath);
@@ -56,12 +74,26 @@ internal static class DefaultOutputResolver
             }
 
             notes.Add("Not .exe / .msi; keep extracting into the source file's directory");
-            return new DefaultOutputPlan(fallback, notes);
+            return new DefaultOutputPlan(
+                fallback,
+                notes,
+                new PackageInspectionInfo
+                {
+                    Decision = "Kept source directory",
+                    Warning = "Unsupported package type"
+                });
         }
         catch (Exception ex)
         {
             notes.Add($"Failed to read the package layout ({ex.Message}); keep extracting into the source file's directory");
-            return new DefaultOutputPlan(fallback, notes);
+            return new DefaultOutputPlan(
+                fallback,
+                notes,
+                new PackageInspectionInfo
+                {
+                    Decision = "Kept source directory",
+                    Warning = ex.Message
+                });
         }
     }
 
@@ -71,7 +103,16 @@ internal static class DefaultOutputResolver
         if (info is null)
         {
             notes.Add("Could not read the default install location from the MSI; keep extracting into the source file's directory");
-            return new DefaultOutputPlan(fallback, notes);
+            return new DefaultOutputPlan(
+                fallback,
+                notes,
+                new PackageInspectionInfo
+                {
+                    Format = "MSI",
+                    Engine = "msiexec /a",
+                    Decision = "Kept source directory",
+                    Warning = "Install location could not be read"
+                });
         }
 
         // Absolute system paths (C:\Program Files\Go, C:\Python27) are for display only and never used as the output directory
@@ -90,7 +131,10 @@ internal static class DefaultOutputResolver
 
         var decision = DecideOutputDir(fallback, info.LeafName, out var reason);
         notes.Add(reason);
-        return new DefaultOutputPlan(decision, notes);
+        return new DefaultOutputPlan(
+            decision,
+            notes,
+            BuildInfo("MSI", "msiexec /a", null, info.LeafName, info.Template, info.Origin, fallback, decision, reason));
     }
 
     private static DefaultOutputPlan InspectExe(
@@ -103,16 +147,27 @@ internal static class DefaultOutputResolver
         if (layout is null)
         {
             notes.Add("Cannot probe the package structure in read-only mode (possibly an unsupported packaging format); keep extracting into the source file's directory");
-            return new DefaultOutputPlan(fallback, notes);
+            return new DefaultOutputPlan(
+                fallback,
+                notes,
+                new PackageInspectionInfo
+                {
+                    Format = FormatFromExtension(sourcePath),
+                    Engine = "7z.dll",
+                    Decision = "Kept source directory",
+                    Warning = "Layout probe failed (unsupported or unreadable package)"
+                });
         }
 
         notes.Add($"Identified as {layout.FormatName} package; inspected {layout.InspectedEntryCount} entries");
 
         // If there is a single top-level directory, use the real directory name from the package (App); when the install path cannot be read, fall back to the package file name
         string? leaf;
+        string? topLevel = null;
         if (layout.HasSingleTopLevelDirectory && !string.IsNullOrWhiteSpace(layout.TopLevelName))
         {
             leaf = layout.TopLevelName;
+            topLevel = leaf;
             notes.Add($"The package already has a single top-level directory {leaf}\\; its contents will be placed directly into the output directory during extraction");
         }
         else
@@ -123,10 +178,49 @@ internal static class DefaultOutputResolver
                 : "Package files are scattered at the root with no single top-level directory (EXE cannot read the install path)");
         }
 
+        var format = NormalizeFormat(layout.FormatName);
+        var engine = string.Equals(format, "Inno Setup", StringComparison.OrdinalIgnoreCase)
+            ? "innoextract"
+            : "7z.dll";
+
         var decision = DecideOutputDir(fallback, leaf, out var reason);
         notes.Add(reason);
-        return new DefaultOutputPlan(decision, notes);
+        return new DefaultOutputPlan(
+            decision,
+            notes,
+            BuildInfo(format, engine, layout.InspectedEntryCount.ToString("N0"), topLevel, null, null, fallback, decision, reason));
     }
+
+    private static PackageInspectionInfo BuildInfo(
+        string format,
+        string engine,
+        string? entryCount,
+        string? topLevelFolder,
+        string? installPath,
+        string? installOrigin,
+        string fallback,
+        string decision,
+        string reason)
+    {
+        var addedLayer = !string.Equals(decision, fallback, StringComparison.OrdinalIgnoreCase);
+        return new PackageInspectionInfo
+        {
+            Format = format,
+            Engine = engine,
+            EntryCount = entryCount,
+            TopLevelFolder = topLevelFolder,
+            InstallPath = installPath,
+            InstallOrigin = installOrigin,
+            Decision = addedLayer ? $"Added layer: {Path.GetFileName(decision)}" : "Kept source directory",
+            Warning = addedLayer ? null : reason
+        };
+    }
+
+    private static string FormatFromExtension(string path) =>
+        string.Equals(Path.GetExtension(path), ".msi", StringComparison.OrdinalIgnoreCase) ? "MSI" : "EXE";
+
+    private static string NormalizeFormat(string name) =>
+        string.Equals(name, "Nsis", StringComparison.OrdinalIgnoreCase) ? "NSIS" : name;
 
     /// <summary>
     /// Pure decision: the output directory is always source directory\leaf, i.e. the directory where the extracted content actually lives.

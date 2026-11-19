@@ -23,15 +23,28 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
+    [NotifyPropertyChangedFor(nameof(DropZoneText))]
     private string? sourcePath;
 
-    [ObservableProperty] private string fileInfoText = "No file selected";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DropZoneText))]
+    private string fileInfoText = "No file selected";
+
     [ObservableProperty] private string outputDir = string.Empty;
     [ObservableProperty] private int progressValue;
     [ObservableProperty] private bool isProgressIndeterminate;
     [ObservableProperty] private string progressText = "—";
     [ObservableProperty] private string stageText = "Ready";
     [ObservableProperty] private string statusText = "Ready";
+
+    // Structured package properties shown in the info card instead of raw log text
+    [ObservableProperty] private string packageFormat = "—";
+    [ObservableProperty] private string packageEngine = "—";
+    [ObservableProperty] private string entryCount = "—";
+    [ObservableProperty] private string installPath = "—";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasWarning))]
+    private string warningText = string.Empty;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanEditPaths), nameof(CanCancel))]
@@ -50,6 +63,14 @@ public partial class MainViewModel : ObservableObject
 
     /// <summary>Requests the UI to put diagnostic information on the clipboard; the ViewModel references no UI types.</summary>
     public event Action<string>? DiagnosticCopyRequested;
+
+    /// <summary>Prompt shown before a file is selected, then the file path and size.</summary>
+    public string DropZoneText => SourcePath is null
+        ? "Drop an installer package here, or click to choose a file"
+        : FileInfoText;
+
+    /// <summary>The warning row is only shown when probing reported a fallback reason.</summary>
+    public bool HasWarning => !string.IsNullOrWhiteSpace(WarningText);
 
     /// <summary>Log text, accumulated with a StringBuilder to avoid memory churn from line-by-line concatenation.</summary>
     public string LogText => _logBuilder.ToString();
@@ -112,9 +133,13 @@ public partial class MainViewModel : ObservableObject
         }
 
         SourcePath = fullPath;
+        ApplyInspection(null);
         CanOpenOutput = false;
         ProgressValue = 0;
+        ProgressText = "—";
         IsProgressIndeterminate = false;
+        StageText = "Ready";
+        StatusText = "Ready";
         LastDiagnostic = string.Empty;
         _outputDirManuallySet = false;
         var generation = ++_sourceGeneration;
@@ -131,6 +156,7 @@ public partial class MainViewModel : ObservableObject
         }
 
         FileInfoText = fileSize >= 0 ? $"{fullPath}  ({FormatSize(fileSize)})" : fullPath;
+        AppendLogSection($"Package: {Path.GetFileName(fullPath)}");
         AppendLog($"Selected file: {fullPath}");
 
         // Reset to the default directory when a new file is selected; a manually edited output directory is not kept, so behavior is predictable.
@@ -173,6 +199,8 @@ public partial class MainViewModel : ObservableObject
                 OutputDir = plan.OutputDir;
             }
 
+            ApplyInspection(plan.Info);
+
             foreach (var note in plan.Notes)
             {
                 AppendLog(note);
@@ -188,6 +216,11 @@ public partial class MainViewModel : ObservableObject
                 return;
             }
 
+            ApplyInspection(new PackageInspectionInfo
+            {
+                Decision = "Unavailable",
+                Warning = ex.Message
+            });
             AppendLog($"Failed to read package install information; keeping the current default directory: {ex.Message}");
             StatusText = "Ready to start extraction";
         }
@@ -218,6 +251,38 @@ public partial class MainViewModel : ObservableObject
     {
         _logBuilder.Append('[').Append(DateTime.Now.ToString("HH:mm:ss")).Append("] ").AppendLine(message);
         OnPropertyChanged(nameof(LogText));
+    }
+
+    /// <summary>Starts a visually distinct block in the log for a newly selected package.</summary>
+    private void AppendLogSection(string title)
+    {
+        const string rule = "============================================================";
+        if (_logBuilder.Length > 0)
+        {
+            _logBuilder.AppendLine();
+        }
+        _logBuilder.AppendLine(rule);
+        _logBuilder.AppendLine($"[{DateTime.Now:HH:mm:ss}] {title}");
+        _logBuilder.AppendLine(rule);
+        OnPropertyChanged(nameof(LogText));
+    }
+
+    /// <summary>Clears the log view; diagnostic copying is unaffected because it uses the last result.</summary>
+    [RelayCommand]
+    private void ClearLog()
+    {
+        _logBuilder.Clear();
+        OnPropertyChanged(nameof(LogText));
+    }
+
+    /// <summary>Publishes the probe result to the info card; null clears it when a new file is selected.</summary>
+    private void ApplyInspection(PackageInspectionInfo? info)
+    {
+        PackageFormat = info?.Format ?? "—";
+        PackageEngine = info?.Engine ?? "—";
+        EntryCount = info?.EntryCount ?? "—";
+        InstallPath = info?.InstallPath ?? "—";
+        WarningText = info?.Warning ?? string.Empty;
     }
 
     /// <summary>Starts extraction. The command is triggered by a button on the UI thread and returns to the UI thread after await.</summary>
