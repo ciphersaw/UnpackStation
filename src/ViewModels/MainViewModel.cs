@@ -19,6 +19,7 @@ public partial class MainViewModel : ObservableObject
     // After a file is selected, the package layout is read asynchronously; generation discards stale results from a previously selected file
     private int _sourceGeneration;
     private bool _outputDirManuallySet;
+    private string? _derivedLeafName;
     private Task? _inspectTask;
 
     [ObservableProperty]
@@ -142,6 +143,7 @@ public partial class MainViewModel : ObservableObject
         StatusText = "Ready";
         LastDiagnostic = string.Empty;
         _outputDirManuallySet = false;
+        _derivedLeafName = null;
         var generation = ++_sourceGeneration;
 
         long fileSize;
@@ -189,12 +191,23 @@ public partial class MainViewModel : ObservableObject
         try
         {
             var plan = await DefaultOutputResolver.InspectAsync(fullPath, CancellationToken.None);
-            if (generation != _sourceGeneration || _outputDirManuallySet)
+            if (generation != _sourceGeneration)
             {
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(plan.OutputDir))
+            _derivedLeafName = plan.LeafName;
+            if (_outputDirManuallySet)
+            {
+                // The user chose a different parent folder; keep that choice but re-attach the name detected from the package.
+                var updated = AppendDerivedLeaf(OutputDir);
+                if (!string.Equals(updated, OutputDir, StringComparison.OrdinalIgnoreCase))
+                {
+                    OutputDir = updated;
+                    AppendLog($"Added the detected directory name to the selected output folder: {OutputDir}");
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(plan.OutputDir))
             {
                 OutputDir = plan.OutputDir;
             }
@@ -206,7 +219,7 @@ public partial class MainViewModel : ObservableObject
                 AppendLog(note);
             }
 
-            AppendLog($"Default output directory: {OutputDir}");
+            AppendLog($"Current output directory: {OutputDir}");
             StatusText = "Ready to start extraction";
         }
         catch (Exception ex)
@@ -226,7 +239,7 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>Sets the output directory from the UI folder dialog; the default rule is no longer applied once the user chooses explicitly.</summary>
+    /// <summary>Sets the output directory from the UI folder dialog; the detected package directory name is kept under the newly chosen parent folder.</summary>
     public void SetOutputDir(string path)
     {
         if (IsBusy || string.IsNullOrWhiteSpace(path))
@@ -236,7 +249,8 @@ public partial class MainViewModel : ObservableObject
 
         try
         {
-            OutputDir = Path.GetFullPath(path);
+            var fullPath = Path.GetFullPath(path);
+            OutputDir = AppendDerivedLeaf(fullPath);
             _outputDirManuallySet = true;
             AppendLog($"Output directory set to: {OutputDir}");
         }
@@ -245,6 +259,29 @@ public partial class MainViewModel : ObservableObject
             AppendLog($"Invalid output directory: {ex.Message}");
             NoticeRequested?.Invoke("The output directory path is invalid; please choose again.");
         }
+    }
+
+    /// <summary>Appends the name detected from the package to a folder chosen by the user, unless that folder already has this name.</summary>
+    private string AppendDerivedLeaf(string baseDir)
+    {
+        var leaf = _derivedLeafName;
+        if (string.IsNullOrWhiteSpace(leaf) || string.IsNullOrWhiteSpace(baseDir))
+        {
+            return baseDir;
+        }
+
+        var trimmed = baseDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (string.Equals(Path.GetFileName(trimmed), leaf, StringComparison.OrdinalIgnoreCase))
+        {
+            return baseDir;
+        }
+
+        var combined = DefaultOutputResolver.DecideOutputDir(baseDir, leaf, out var reason);
+        if (string.Equals(combined, baseDir, StringComparison.OrdinalIgnoreCase))
+        {
+            AppendLog($"Cannot add the detected directory name \"{leaf}\" to the selected folder: {reason}");
+        }
+        return combined;
     }
 
     public void AppendLog(string message)

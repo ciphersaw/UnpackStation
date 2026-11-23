@@ -10,7 +10,8 @@ namespace UnpackStation.Services;
 internal sealed record DefaultOutputPlan(
     string OutputDir,
     IReadOnlyList<string> Notes,
-    PackageInspectionInfo? Info = null);
+    PackageInspectionInfo? Info = null,
+    string? LeafName = null);
 
 /// <summary>
 /// Computes the "final" default output directory: first read the package's default install location / entry structure,
@@ -131,10 +132,12 @@ internal static class DefaultOutputResolver
 
         var decision = DecideOutputDir(fallback, info.LeafName, out var reason);
         notes.Add(reason);
+        var leafName = string.Equals(decision, fallback, StringComparison.OrdinalIgnoreCase) ? null : info.LeafName;
         return new DefaultOutputPlan(
             decision,
             notes,
-            BuildInfo("MSI", "msiexec /a", null, info.LeafName, info.Template, info.Origin, fallback, decision, reason));
+            BuildInfo("MSI", "msiexec /a", null, info.LeafName, info.Template, info.Origin, fallback, decision, reason),
+            leafName);
     }
 
     private static DefaultOutputPlan InspectExe(
@@ -207,10 +210,12 @@ internal static class DefaultOutputResolver
 
         var decision = DecideOutputDir(fallback, leaf, out var reason);
         notes.Add(reason);
+        var leafName = string.Equals(decision, fallback, StringComparison.OrdinalIgnoreCase) ? null : leaf;
         return new DefaultOutputPlan(
             decision,
             notes,
-            BuildInfo(format, engine, layout.InspectedEntryCount.ToString("N0"), topLevel, detectedName, detectedOrigin, fallback, decision, reason));
+            BuildInfo(format, engine, layout.InspectedEntryCount.ToString("N0"), topLevel, detectedName, detectedOrigin, fallback, decision, reason),
+            leafName);
     }
 
     private static PackageInspectionInfo BuildInfo(
