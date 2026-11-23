@@ -37,6 +37,11 @@ directory. The same read-only listing is used when a file is selected, so Inno S
 also get an automatically derived default output directory instead of falling back to the
 source file's directory.
 
+When a package has no single top-level directory, the isolation directory name comes from
+the installer's own application name: Inno Setup's AppName is read via `innoextract --info`,
+and other EXE packages fall back to the PE version resource (`ProductName` / `FileDescription`).
+The setup file name is only used when neither source is available.
+
 Safety: path traversal protection (including symlinks and directory junctions),
 decompression-bomb protection (aborts above 20 GB or 100,000 files), Mark of the Web
 on extracted executables, standard user privileges (`asInvoker`, no elevation),

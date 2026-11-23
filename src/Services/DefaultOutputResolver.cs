@@ -161,9 +161,17 @@ internal static class DefaultOutputResolver
 
         notes.Add($"Identified as {layout.FormatName} package; inspected {layout.InspectedEntryCount} entries");
 
-        // If there is a single top-level directory, use the real directory name from the package (App); when the install path cannot be read, fall back to the package file name
+        var format = NormalizeFormat(layout.FormatName);
+        var engine = string.Equals(format, "Inno Setup", StringComparison.OrdinalIgnoreCase)
+            ? "innoextract"
+            : "7z.dll";
+
+        // Prefer the package's own top-level directory; only when there is none do we look for
+        // the application name reported by the installer itself before falling back to the file name.
         string? leaf;
         string? topLevel = null;
+        string? detectedName = null;
+        string? detectedOrigin = null;
         if (layout.HasSingleTopLevelDirectory && !string.IsNullOrWhiteSpace(layout.TopLevelName))
         {
             leaf = layout.TopLevelName;
@@ -172,23 +180,37 @@ internal static class DefaultOutputResolver
         }
         else
         {
-            leaf = Path.GetFileNameWithoutExtension(sourcePath);
-            notes.Add(string.Equals(layout.FormatName, "Inno Setup", StringComparison.OrdinalIgnoreCase)
-                ? "Inno Setup payload files sit directly under the install root with no single top-level directory"
-                : "Package files are scattered at the root with no single top-level directory (EXE cannot read the install path)");
-        }
+            if (string.Equals(format, "Inno Setup", StringComparison.OrdinalIgnoreCase))
+            {
+                detectedName = InnoSetupInstallNameReader.TryRead(sourcePath, ct);
+                if (detectedName is not null)
+                {
+                    detectedOrigin = "innoextract --info";
+                }
+            }
 
-        var format = NormalizeFormat(layout.FormatName);
-        var engine = string.Equals(format, "Inno Setup", StringComparison.OrdinalIgnoreCase)
-            ? "innoextract"
-            : "7z.dll";
+            detectedName ??= InstallerDisplayName.FromPeVersionInfo(sourcePath);
+            if (detectedName is not null)
+            {
+                detectedOrigin ??= "PE version resource";
+                leaf = detectedName;
+                notes.Add($"Installer reports the application name \"{detectedName}\" (from {detectedOrigin}); using it instead of the setup file name");
+            }
+            else
+            {
+                leaf = Path.GetFileNameWithoutExtension(sourcePath);
+                notes.Add(string.Equals(format, "Inno Setup", StringComparison.OrdinalIgnoreCase)
+                    ? "Inno Setup payload files sit directly under the install root and no application name could be read"
+                    : "Package files are scattered at the root with no single top-level directory and no application name could be read");
+            }
+        }
 
         var decision = DecideOutputDir(fallback, leaf, out var reason);
         notes.Add(reason);
         return new DefaultOutputPlan(
             decision,
             notes,
-            BuildInfo(format, engine, layout.InspectedEntryCount.ToString("N0"), topLevel, null, null, fallback, decision, reason));
+            BuildInfo(format, engine, layout.InspectedEntryCount.ToString("N0"), topLevel, detectedName, detectedOrigin, fallback, decision, reason));
     }
 
     private static PackageInspectionInfo BuildInfo(

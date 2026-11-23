@@ -1,7 +1,3 @@
-using System.Diagnostics;
-using System.IO;
-using System.Text;
-
 namespace UnpackStation.Services;
 
 /// <summary>
@@ -12,7 +8,6 @@ namespace UnpackStation.Services;
 internal static class InnoSetupLayoutProbe
 {
     private const int MaxEntries = 512;
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
 
     internal static ArchiveLayoutInfo? TryProbe(string exePath, CancellationToken ct) =>
         Parse(ListEntries(exePath, ct));
@@ -34,65 +29,8 @@ internal static class InnoSetupLayoutProbe
         .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
         .Count(line => !string.IsNullOrWhiteSpace(line));
 
-    private static string? ListEntries(string exePath, CancellationToken ct)
-    {
-        var engine = InnoSetupExtractor.EnginePath;
-        if (!File.Exists(engine))
-        {
-            return null;
-        }
-
-        var startInfo = new ProcessStartInfo(engine)
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8
-        };
-        startInfo.ArgumentList.Add("--list");
-        startInfo.ArgumentList.Add("-m");       // --exclude-temp, same as extraction
-        startInfo.ArgumentList.Add("-n");       // --no-extract-unknown
-        startInfo.ArgumentList.Add("--silent");
-        startInfo.ArgumentList.Add(exePath);
-
-        using var process = new Process { StartInfo = startInfo };
-        try
-        {
-            if (!process.Start())
-            {
-                return null;
-            }
-
-            var stdoutTask = ReadAllAsync(process.StandardOutput);
-            var stderrTask = ReadAllAsync(process.StandardError);
-
-            using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            waitCts.CancelAfter(Timeout);
-            try
-            {
-                process.WaitForExitAsync(waitCts.Token).GetAwaiter().GetResult();
-            }
-            catch (OperationCanceledException)
-            {
-                KillTree(process);
-                process.WaitForExit(5000);
-                return null;
-            }
-
-            Task.WhenAny(Task.WhenAll(stdoutTask, stderrTask), Task.Delay(2000))
-                .GetAwaiter().GetResult();
-            return process.ExitCode == 0 && stdoutTask.IsCompletedSuccessfully
-                ? stdoutTask.Result
-                : null;
-        }
-        catch (Exception)
-        {
-            KillTree(process);
-            return null;
-        }
-    }
+    private static string? ListEntries(string exePath, CancellationToken ct) =>
+        InnoExtractRunner.Run(exePath, ct, "--list", "-m", "-n", "--silent");
 
     internal static ArchiveLayoutInfo? Parse(string? output)
     {
@@ -162,30 +100,4 @@ internal static class InnoSetupLayoutProbe
         return separator >= 0 ? path[(separator + 1)..] : string.Empty;
     }
 
-    private static async Task<string> ReadAllAsync(StreamReader reader)
-    {
-        try
-        {
-            return await reader.ReadToEndAsync();
-        }
-        catch (Exception ex) when (ex is IOException or ObjectDisposedException)
-        {
-            return string.Empty;
-        }
-    }
-
-    private static void KillTree(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or UnauthorizedAccessException)
-        {
-            System.Diagnostics.Debug.WriteLine($"Failed to kill the innoextract probe: {ex.Message}");
-        }
-    }
 }
